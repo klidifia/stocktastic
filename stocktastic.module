@@ -1,0 +1,958 @@
+<?php
+
+/**
+ * @file
+ * Stocktastic stock picking contest.
+ */
+
+
+// @TODO: Hook up the delete permission to the button and the function it calls also.
+
+
+module_load_include('inc', 'stocktastic');
+
+/**
+ * Implements hook_menu().
+ */
+function stocktastic_menu() {
+  $items = array();
+
+  $items['admin/config/services/stocktastic'] = array(
+    'title' => 'Stocktastic settings',
+    'description' => 'Configure settings for Stocktastic',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('stocktastic_admin_settings'),
+    'access arguments' => array('administer site configuration'),
+    'file' => 'stocktastic.admin.inc',
+  );
+  $items['admin/config/services/stocktastic/stocks'] = array(
+    'title' => 'Stocks',
+    'description' => 'Stocks',
+    'page callback' => 'stocktastic_stocks',
+    'access arguments' => array('administer site configuration'),
+    'file' => 'stocktastic.admin.inc',
+  );
+  $items['admin/config/services/stocktastic/stocks/add'] = array(
+    'title' => 'Add a stock',
+    'description' => 'Add a stock',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('stocktastic_add_stock_form'),
+    'access arguments' => array('add stocktastic stocks'),
+    'file' => 'stocktastic.admin.inc',
+  );
+  $items['admin/config/services/stocktastic/stocks/%/edit'] = array(
+    'title' => 'Stocks',
+    'description' => 'Stocks',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('stocktastic_edit_stock_form'),
+    'access arguments' => array('edit stocktastic stocks'),
+    'file' => 'stocktastic.admin.inc',
+  );
+  // @TODO: Separate permissions for dividends.
+  $items['admin/config/services/stocktastic/dividends'] = array(
+    'title' => 'Dividends',
+    'description' => 'Dividends',
+    'page callback' => 'stocktastic_dividends',
+    'access arguments' => array('administer site configuration'),
+    'file' => 'stocktastic.admin.inc',
+  );
+  $items['admin/config/services/stocktastic/dividends/add'] = array(
+    'title' => 'Add a dividend',
+    'description' => 'Add a dividend',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('stocktastic_add_dividend_form'),
+    'access arguments' => array('add stocktastic stocks'),
+    'file' => 'stocktastic.admin.inc',
+  );
+  $items['admin/config/services/stocktastic/dividends/%/edit'] = array(
+    'title' => 'Dividends',
+    'description' => 'Dividends',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('stocktastic_edit_dividend_form'),
+    'access arguments' => array('edit stocktastic stocks'),
+    'file' => 'stocktastic.admin.inc',
+  );
+
+  $items['rankings/2015'] = array(
+    'title' => '2015 NZX stock picking contest',
+    'description' => '2015 NZX stock picking contest',
+    'page callback' => 'stocktastic_stock_contest_2015',
+    'access arguments' => array('access content'),
+  );
+    $items['rankings/2016'] = array(
+    'title' => '2016 NZX stock picking contest',
+    'description' => '2016 NZX stock picking contest',
+    'page callback' => 'stocktastic_stock_contest_2016',
+    'access arguments' => array('access content'),
+  );
+  $items['stocks'] = array(
+    'title' => 'Stocks',
+    'description' => 'Stocks',
+    'page callback' => 'stocktastic_stocks_page',
+    'access arguments' => array('access content'),
+  );
+  $items['dividends'] = array(
+    'title' => 'Dividends',
+    'description' => 'Dividends',
+    'page callback' => 'stocktastic_dividends_page',
+    'access arguments' => array('access content'),
+  );
+  $items['entry-form'] = array(
+    'title' => 'Entry form',
+    'description' => '2016 stock picking contest entry',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('stocktastic_entry_form'),
+    'access arguments' => array('access content'),
+  );
+  $items['remove-entry'] = array(
+    'title' => 'Remove entry',
+    'description' => 'Remove entry',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('stocktastic_exit_form'),
+    'access arguments' => array('access content'),
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_theme()
+ */
+function stocktastic_theme($existing, $type, $theme, $path) {
+  return array(
+    'stocktastic' => array(
+      'template' => 'stocktastic',
+      'variables' => array(),
+    ),
+  );
+}
+
+/**
+ * Implements hook_permission()
+ */
+function stocktastic_permission() {
+  return array(
+    'administer stocktastic' =>  array(
+      'title' => t('Administer stocktastic'),
+      'description' => t('Permission for administering stocktastic settings.'),
+    ),
+    'add stocktastic stocks' =>  array(
+      'title' => t('Add stocktastic stocks'),
+      'description' => t('Permission for deleting stocktastic stocks.'),
+    ),
+    'edit stocktastic stocks' =>  array(
+      'title' => t('Edit stocktastic stocks'),
+      'description' => t('Permission for deleting stocktastic stocks.'),
+    ),
+    'delete stocktastic stocks' =>  array(
+      'title' => t('Delete stocktastic stocks'),
+      'description' => t('Permission for deleting stocktastic stocks.'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_cron().
+ *
+ * Function to update stock data, and then update the database with the users' percentage change for the year.
+ */
+function stocktastic_cron() {
+  // Grab dividends for a stock - the next one alphabetically from last time.
+  $last_dividend = variable_get('stocktastic_last_dividend', 'AAA');
+  $symbol = db_select('stocktastic_stocks', 'ss')
+    ->fields('ss', array('symbol'))
+    ->condition('ss.symbol', $last_dividend, '>')
+    ->execute()
+    ->fetchField();
+  // If there is no result, we are likely at the end - select the first record.
+  if ($symbol === FALSE) {
+    $symbol = db_select('stocktastic_stocks', 'ss')
+      ->fields('ss', array('symbol'))
+      ->orderBy('ss.symbol', 'ASC')
+      ->execute()
+      ->fetchField();
+  }
+  variable_set('stocktastic_last_dividend', $symbol);
+  $symbol = stocktastic_symbol_truncate($symbol);
+  stocktastic_dividends_fetch($symbol);
+
+  // Get the stock symbols from the database to fetch information for.
+  $symbols = db_select('stocktastic_stocks', 'ss')
+    ->fields('ss', array('symbol'))
+    ->execute()
+    ->fetchCol();
+  // Prepend NZE: to the symbols for passing to Google.
+  foreach ($symbols as $symbol) {
+    $google_symbols[] = 'NZE:' . stocktastic_symbol_truncate($symbol);
+  }
+  // Google limits stock updates to 100 per request. Split it up if needed.
+  $limit = 100;
+  $batches = array_chunk($google_symbols, $limit);
+  foreach ($batches as $batch) {
+    $google_lookup[] = implode($batch, ',');
+  }
+  foreach($google_lookup as $lookup) {
+    $quote = file_get_contents('https://finance.google.com/finance/info?client=ig&q=' . $lookup);
+    $raw = str_replace("\n", "", $quote);
+    // Remove //, [ and ] to build qualified string.
+    $data = substr($raw, 4, strlen($raw) - 5);
+    $data = str_replace('},{', '}{', $data);
+    // All stock data.
+    $data = stocktastic_json_split_objects($data);
+    foreach ($data as $stock) {
+      $json = drupal_json_decode($stock);
+      // We only want the stock symbol (t) and price (l).
+      $stocks[] = array(
+        'symbol' => $json['t'] . '.NZ',
+        'price' => $json['l'],
+      );
+    }
+    foreach ($stocks as $stock) {
+      db_merge('stocktastic_stocks')
+        ->key(array('symbol' => $stock['symbol']))
+        ->fields(array(
+          'last_trade_price_only' => $stock['price']
+        ))
+        ->execute();
+    }
+  }
+
+  // @TODO: Don't do this so often?
+  // Add all dividends to the stocks, first wipe them all...
+  db_update('stocktastic_stocks')
+    ->fields(array(
+      'dividends' => 0
+    ))
+    ->execute();
+  $start = new DateTime('2015-01-01');
+  $start = $start->getTimestamp();
+  $end = new DateTime('2015-12-31');
+  $end = $end->getTimestamp();
+
+  $query = db_select('stocktastic_dividends', 'sd')
+    ->fields('sd', array('symbol', 'amount', 'ex_dividend'))
+    ->condition('ex_dividend', $start, '>')
+    ->condition('ex_dividend', $end, '<')
+    ->groupBy('symbol');
+  $query->addExpression('SUM(amount)', 'amount');
+  $dividends = $query->execute()->fetchAll();
+
+  foreach ($dividends as $dividend) {
+    $dividend->amount = (float) round($dividend->amount, 3);
+
+    db_update('stocktastic_stocks')
+      ->fields(array(
+        'dividends' => $dividend->amount
+      ))
+      ->condition('symbol', $dividend->symbol, '=')
+      ->execute();
+  }
+
+  // Calculate stock yearly percentage changes.
+  $stocks = db_select('stocktastic_stocks', 'ss')
+    ->fields('ss', array('symbol', 'last_trade_price_only', 'year_start_price', 'dividends', 'manual_adjustments'))
+    ->execute()
+    ->fetchAll();
+
+  if (isset($stocks)) {
+    foreach ($stocks as $stock) {
+      $year_percent_change = stocktastic_format_decimals(((($stock->last_trade_price_only + $stock->dividends + $stock->manual_adjustments) / $stock->year_start_price) - 1) * 100, 2);
+
+      db_update('stocktastic_stocks')
+        ->fields(array(
+          'year_percent_change' => $year_percent_change
+        ))
+        ->condition('symbol', $stock->symbol, '=')
+        ->execute();
+    }
+  }
+
+  // Now update the percentage change for each user.
+  $result = db_select('stocktastic_contest', 'sc')
+    ->fields('sc', array('uid', 'stock1', 'stock2', 'stock3', 'stock4', 'stock5'))
+	->condition('year', 2015, '=')
+    ->execute();
+
+  while ($data = $result->fetchObject()) {
+    // Calculate the users average percentage change for the year.
+    $symbols = array($data->stock1, $data->stock2, $data->stock3, $data->stock4, $data->stock5);
+
+    // Check if there are less than 5 picks.
+    $picks = count(array_filter($symbols));
+
+    $query = db_select('stocktastic_stocks', 'ss')
+      ->condition('ss.symbol', $symbols, 'IN');
+    $query->addExpression('SUM(year_percent_change)');
+    $total_change = $query->execute()->fetchField();
+    $average_change = $total_change / $picks;
+    $calc = stocktastic_format_decimals($average_change, 2);
+
+    db_update('stocktastic_contest')
+      ->fields(array(
+        'year_change' => $calc
+      ))
+      ->condition('uid', $data->uid, '=')
+      ->condition('year', 2015, '=')
+      ->execute();
+  }
+
+  // Now update the ranking for each user.
+  $result = db_select('stocktastic_contest', 'sc')
+    ->fields('sc', array('uid', 'year_change'))
+	->condition('year', 2015, '=')
+    ->orderBy('year_change', 'DESC')
+    ->execute();
+
+  $i = 1;
+  while ($data = $result->fetchObject()) {
+    db_update('stocktastic_contest')
+      ->fields(array(
+        'rank' => $i
+      ))
+      ->condition('uid', $data->uid, '=')
+      ->condition('year', 2015, '=')
+      ->execute();
+
+    if (($data->uid < 152) || ($data->uid > 159)) {
+      $i++;
+    }
+  }
+
+  variable_set('stocktastic_last_update', REQUEST_TIME);
+  cache_clear_all('variables', 'cache');
+}
+
+/**
+ * Implements hook_form().
+ */
+function stocktastic_entry_form($form, &$form_state) {
+  // Handle unauthenticated users.
+  if (!user_is_logged_in()) {
+    $destination = drupal_get_destination();
+    $form['message'] = array(
+      '#prefix' => '<p>',
+      '#markup' => t('You have to be logged in to enter the competition.'),
+      '#suffix' => '</p><p>' . l('Login', 'user/login', array('query' => array($destination))) . ' | ' . l('Sign up', 'user/register') . '.</p>'
+    );
+    return $form;
+  }
+
+  // Grab the existing entry details.
+  global $user;
+  $result = db_select('stocktastic_contest', 'sc')
+    ->fields('sc', array('uid', 'stock1', 'stock2', 'stock3', 'stock4', 'stock5'))
+    ->condition('sc.uid', $user->uid, '=')
+	->condition('year', 2016, '=')
+    ->execute()
+    ->fetch();
+
+  // If after new years, prevent edits / submissions.
+  if (REQUEST_TIME > 1452456000) {
+    $form['message'] = array(
+      '#type' => 'markup',
+      '#prefix' => '<p>',
+      '#markup' => t('We are in 2016, entries to the contest are closed!'),
+      '#suffix' => '</p>',
+    );
+    if ($result !== FALSE) {
+      $form['remove'] = array(
+        '#type' => 'submit',
+        '#attributes' => array('class' => array('btn-danger')),
+        '#value' => t('Remove entry'),
+        '#validate' => array('stocktastic_entry_form_cancel_validate'),
+        '#submit' => array('stocktastic_entry_form_cancel_submit'),
+      );
+    }
+    return $form;
+  }
+
+  $close = date('l jS F Y - H:i:s', 1452456000);
+  // Clear any current messages.
+  drupal_get_messages();
+  drupal_set_message('Entries can be submitted and modified until: ' . $close . '.', 'info');
+
+  // Get the list of stocks and store in an array keyed by the stock code.
+  $stocks = array();
+  $query = db_query("SELECT symbol, name FROM {stocktastic_stocks}");
+  foreach ($query as $stock) {
+    // Prefix the stock option name with the symbol, but remove the suffix (e.g. XRO.NZ becomes XRO).
+    $stocks[$stock->symbol] = stocktastic_symbol_truncate($stock->symbol) . ' - ' . $stock->name;
+  }
+
+  // The 5 selection elements for choosing stocks.
+  $empty_option = t('- Choose a stock -');
+  $form['stock1'] = array(
+    '#type' => 'select',
+    '#title' => t('First pick'),
+    '#empty_option' => $empty_option,
+    '#default_value' => isset($result->stock1) ? $result->stock1 : '',
+    '#options' => $stocks,
+    '#required' => TRUE,
+  );
+  $form['stock2'] = array(
+    '#type' => 'select',
+    '#title' => t('Second pick'),
+    '#empty_option' => $empty_option,
+    '#default_value' => isset($result->stock2) ? $result->stock2 : '',
+    '#options' => $stocks,
+    '#required' => TRUE,
+  );
+  $form['stock3'] = array(
+    '#type' => 'select',
+    '#title' => t('Third pick'),
+    '#empty_option' => $empty_option,
+    '#default_value' => isset($result->stock3) ? $result->stock3 : '',
+    '#options' => $stocks,
+    '#required' => TRUE,
+  );
+  $form['stock4'] = array(
+    '#type' => 'select',
+    '#title' => t('Fourth pick'),
+    '#empty_option' => $empty_option,
+    '#default_value' => isset($result->stock4) ? $result->stock4 : '',
+    '#options' => $stocks,
+    '#required' => TRUE,
+  );
+  $form['stock5'] = array(
+    '#type' => 'select',
+    '#title' => t('Final pick'),
+    '#empty_option' => $empty_option,
+    '#default_value' => isset($result->stock5) ? $result->stock5 : '',
+    '#options' => $stocks,
+    '#required' => TRUE,
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#attributes' => array('class' => array('btn-success')),
+    '#value' => isset($result->stock5) ? t('Modify entry') : t('Submit entry'),
+    '#validate' => array('stocktastic_entry_form_validate'),
+    '#submit' => array('stocktastic_entry_form_submit'),
+  );
+  if ($result !== FALSE) {
+    $form['remove'] = array(
+      '#type' => 'submit',
+      '#attributes' => array('class' => array('btn-danger')),
+      '#value' => t('Remove entry'),
+      '#validate' => array('stocktastic_entry_form_cancel_validate'),
+      '#submit' => array('stocktastic_entry_form_cancel_submit'),
+    );
+  }
+
+  return $form;
+}
+
+/**
+ * Implements hook_form().
+ */
+function stocktastic_exit_form($form, &$form_state) {
+  drupal_get_messages();
+  $form['stock1'] = array(
+    '#type' => 'markup',
+    '#prefix' => '<p>',
+    '#markup' => t('Are you sure you wish to remove your entry to the competition?'),
+    '#suffix' => '</p>',
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#attributes' => array('class' => array('btn-warning')),
+    '#value' => t('Yes - Remove entry (cannot be undone)'),
+  );
+  $form['cancel'] = array(
+    '#type' => 'markup',
+    '#markup' => l('Cancel', 'rankings'),
+  );
+  return $form;
+}
+
+function stocktastic_exit_form_submit($form, &$form_state) {
+  global $user;
+  db_delete('stocktastic_contest')
+    ->condition('uid', $user->uid)
+    ->execute();
+  // Clear any current messages.
+  drupal_get_messages();
+  drupal_set_message(t('Your entry has been removed.'));
+  $form_state['redirect'] = 'rankings';
+}
+
+function stocktastic_entry_form_cancel_validate($form, &$form_state) {
+
+}
+
+function stocktastic_entry_form_cancel_submit($form, &$form_state) {
+  $form_state['redirect'] = 'remove-entry';
+}
+
+function stocktastic_entry_form_validate($form, &$form_state) {
+  // Truncate the values array to get the 5 stock choices.
+  $choices = array_slice($form_state['values'], 0, 5);
+
+  // Check for duplicates and present an error, but not null duplicates, as the choices are required.
+  if (count(array_unique($choices)) < count($choices) && !in_array(null, $choices)) {
+    form_set_error('', t('You\'ve selected the same stock multiple times.'));
+  }
+}
+
+function stocktastic_entry_form_submit($form, &$form_state) {
+  // Double tap.
+  if (!user_is_logged_in() || REQUEST_TIME > 1452456000) {
+    return;
+  }
+
+  global $user;
+
+  db_merge('stocktastic_contest')
+    ->key(array('year' => '2016', 'uid' => $user->uid))
+    ->fields(array(
+      'year' => '2016',
+      'uid' => $user->uid,
+      'alias' => $user->name,
+      'stock1' => $form_state['values']['stock1'],
+      'stock2' => $form_state['values']['stock2'],
+      'stock3' => $form_state['values']['stock3'],
+      'stock4' => $form_state['values']['stock4'],
+      'stock5' => $form_state['values']['stock5'],
+    ))
+    ->execute();
+
+  // Clear any current messages.
+  drupal_get_messages();
+  drupal_set_message(t('Your entry has been saved.'));
+}
+
+/**
+ * Register JS callbacks. Read the documentation for a detailed explanation.
+ *
+ * @return array
+ *   An array of callbacks with the following possible keys for each callback:
+ *   - callback: (required) The function to call to display the results when an
+ *               ajax call occurs on this path.
+ *   - page arguments: (optional) Select which arguments from the URL to pass
+ *                     to the callback. Starting with 0 with the
+ *                     js/[module] stripped from the path. Please note that 0
+ *                     will contain the used callback.
+ *   - includes: (optional) Load aditional files from the /includes directory,
+ *               without the extension.
+ *   - dependencies: (optional) Load additional modules for this callback.
+ *   - bootstrap: (optional) The bootstrap level Drupal should boot to, defaults
+ *                to DATABASE or SESSION if an access argument/callback is
+ *                defined.
+ *   - file: (optional) In which file the callback function is defined.
+ *   - access arguments: (optional) Arguments for the access callback.
+ *   - access callback: (optional) Callback for the access check, default to
+ *                      user_access if there is an acces argument defined.
+ *   - skip_hook_init: (optional) Set to true to skip the init hooks. Warning:
+ *                     This might cause unwanted behavior and should only be
+ *                     disabled with care.
+ *   - i18n: (optional) Boolean to enable or forcefully disable i18n. JS auto-
+ *                      detects the language string in the path but not in any
+ *                      other form. Set this option to TRUE to enable
+ *                      translations.
+ */
+function stocktastic_js() {
+  return array(
+    'getstockinfo' => array(
+      'callback' => 'stocktastic_get_stock_info',
+      'page arguments' => array(1),
+      'bootstrap' => DRUPAL_BOOTSTRAP_CONFIGURATION,
+      'skip_hook_init' => FALSE,
+      'i18n' => FALSE,
+    ),
+  );
+}
+
+function stocktastic_get_stock_info($symbol) {
+  $result = db_select('stocktastic_stocks', 'ss')
+    ->fields('ss', array('name', 'last_trade_price_only', 'year_start_price', 'dividends', 'manual_adjustments', 'year_percent_change'))
+    ->condition('ss.symbol', check_plain($symbol) . '.NZ', '=')
+    ->execute()
+    ->fetch();
+
+  $result->last_trade_price_only = number_format((float)$result->last_trade_price_only, 3, '.', '');
+  $result->year_start_price = number_format((float)$result->year_start_price, 3, '.', '');
+  $result->dividends = number_format((float)$result->dividends, 3, '.', '');
+  $result->manual_adjustments = number_format((float)$result->manual_adjustments, 3, '.', '');
+  $result->year_percent_change = number_format((float)$result->year_percent_change, 2, '.', '');
+
+  $output = $result;
+
+  drupal_json_output($output);
+}
+
+
+
+/**
+ * The rankings 2015 page.
+ * @return string
+ */
+function stocktastic_stock_contest_2015() {
+  drupal_set_message('The selections made by contestants should not be construed as any kind of financial advice. People should consider speaking to an authorised financial adviser before making any investments of any kind.', 'warning');
+
+  if (REQUEST_TIME < variable_get('stocktastic_entry_close', 1420023639)) {
+    $close = date('l jS F Y - H:i:s', variable_get('stocktastic_entry_close', 1420023639));
+    drupal_set_message('Competition goes live and entries close on ' . $close . '.', 'info');
+  }
+  drupal_add_js(drupal_get_path('module', 'stocktastic') . '/stocktastic.js');
+  // Code for dialog popups with stock info.
+  drupal_add_library('system', 'ui.dialog');
+  $output = '<div id="dialog" style="display: none;">';
+  $output .= '<p style="text-align: center;"><img src="' . drupal_get_path('theme', 'stocky') . '/images/ajax-loader.gif" /></p>';
+  $output .= '</div>';
+
+  $averages = stocktastic_get_averages();
+  $output .= theme('stocktastic',
+    array(
+      'stocks_average' => $averages['stocks_average'],
+      'contestants_average' => $averages['contestants_average'],
+      'brokers_average' => $averages['brokers_average'],
+    )
+  );
+
+  $header = array(
+    'rank' => array('data' => t('Rank')),
+    'alias' => array('data' => t('Alias')),
+    'stocks' => array('data' => t('Stocks')),
+    'change' => array('data' => t('Change'), 'style' => 'text-align: right')
+  );
+
+  $query = db_select('stocktastic_contest', 'sc')
+    ->extend('PagerDefault')
+    ->extend('TableSort');
+  $result = $query->fields('sc', array('uid', 'alias', 'rank', 'stock1', 'stock2', 'stock3', 'stock4', 'stock5', 'year_change'))
+	->condition('year', 2015, '=')
+    ->limit(1000)
+    ->orderBy('year_change', 'DESC')
+    ->execute();
+
+  while ($data = $result->fetchObject()) {
+    $rank = $data->rank;
+    $alias = check_plain($data->alias);
+
+    // Bold the brokers' picks.
+    if (($data->uid >= 152) && ($data->uid <= 159)) {
+      $rank = '<span style="font-weight: bold;">' . $rank . '</span>';
+      $alias = '<span style="font-weight: bold;">' . $alias . '</span>';
+    }
+
+    // Output a row in the table.
+    $rows[] = array(
+      $rank,
+      $alias,
+      '<span class="stock">' . stocktastic_symbol_truncate($data->stock1) . '</span> <span class="stock">' . stocktastic_symbol_truncate($data->stock2) . '</span> <span class="stock">' . stocktastic_symbol_truncate($data->stock3) . '</span> <span class="stock">' . stocktastic_symbol_truncate($data->stock4) . '</span> <span class="stock">' . stocktastic_symbol_truncate($data->stock5) .'</span>',
+      stocktastic_format_align(stocktastic_format_decimals($data->year_change, 2) . '%')
+    );
+  }
+
+  $output .= theme_table(array('header' => $header, 'rows' => $rows, 'attributes' => array('width' => '100%', 'id' => 'stocktastic-table'), 'sticky' => TRUE, 'caption' => t('Updates hourly. Last updated: ' . date('l j M Y - g:ia', variable_get('stocktastic_last_update'))), 'colgroups' => array(), 'empty' => t('No data.'))) . theme("pager");
+
+  return $output;
+}
+
+/**
+ * The rankings 2016 page.
+ * @return string
+ */
+function stocktastic_stock_contest_2016() {
+  drupal_set_message('The selections made by contestants should not be construed as any kind of financial advice. People should consider speaking to an authorised financial adviser before making any investments of any kind.', 'warning');
+
+  if (REQUEST_TIME < 1452456000) {
+    $close = date('l jS F Y - H:i:s', 1452456000);
+    drupal_set_message('Competition goes live and entries close on ' . $close . '.', 'info');
+  }
+  drupal_add_js(drupal_get_path('module', 'stocktastic') . '/stocktastic.js');
+  // Code for dialog popups with stock info.
+  drupal_add_library('system', 'ui.dialog');
+  $output = '<div id="dialog" style="display: none;">';
+  $output .= '<p style="text-align: center;"><img src="' . drupal_get_path('theme', 'stocky') . '/images/ajax-loader.gif" /></p>';
+  $output .= '</div>';
+
+  $averages = stocktastic_get_averages();
+  $output .= theme('stocktastic',
+    array(
+      'stocks_average' => $averages['stocks_average'],
+      'contestants_average' => $averages['contestants_average'],
+      'brokers_average' => $averages['brokers_average'],
+    )
+  );
+
+  $header = array(
+    'rank' => array('data' => t('Rank')),
+    'alias' => array('data' => t('Alias')),
+    'stocks' => array('data' => t('Stocks')),
+    'change' => array('data' => t('Change'), 'style' => 'text-align: right')
+  );
+
+  $query = db_select('stocktastic_contest', 'sc')
+    ->extend('PagerDefault')
+    ->extend('TableSort');
+  $result = $query->fields('sc', array('uid', 'alias', 'rank', 'stock1', 'stock2', 'stock3', 'stock4', 'stock5', 'year_change'))
+	->condition('year', 2016, '=')
+    ->limit(1000)
+    ->orderBy('year_change', 'DESC')
+    ->execute();
+
+  while ($data = $result->fetchObject()) {
+    $rank = $data->rank;
+    $alias = check_plain($data->alias);
+
+    // Bold the brokers' picks.
+    if (($data->uid >= 152) && ($data->uid <= 159)) {
+      $rank = '<span style="font-weight: bold;">' . $rank . '</span>';
+      $alias = '<span style="font-weight: bold;">' . $alias . '</span>';
+    }
+
+    // Output a row in the table.
+    $rows[] = array(
+      $rank,
+      $alias,
+      '<span class="stock">' . stocktastic_symbol_truncate($data->stock1) . '</span> <span class="stock">' . stocktastic_symbol_truncate($data->stock2) . '</span> <span class="stock">' . stocktastic_symbol_truncate($data->stock3) . '</span> <span class="stock">' . stocktastic_symbol_truncate($data->stock4) . '</span> <span class="stock">' . stocktastic_symbol_truncate($data->stock5) .'</span>',
+      stocktastic_format_align(stocktastic_format_decimals($data->year_change, 2) . '%')
+    );
+  }
+
+  $output .= theme_table(array('header' => $header, 'rows' => $rows, 'attributes' => array('width' => '100%', 'id' => 'stocktastic-table'), 'sticky' => TRUE, 'caption' => t('Updates hourly. Last updated: ' . date('l j M Y - g:ia', variable_get('stocktastic_last_update'))), 'colgroups' => array(), 'empty' => t('No data.'))) . theme("pager");
+
+  return $output;
+}
+
+/**
+ * Return an array of JSON objects.
+ *
+ * Because the JSON output retrieved from the Google Finance API is presented
+ * as many comma separated pieces of JSON not ready to pass be decoded, this
+ * function will split the JSON objects apart and return them in an array.
+ *
+ * @param string $json
+ *   The JSON data to parse
+ *
+ * @return array
+ */
+function stocktastic_json_split_objects($json) {
+  $q = FALSE;
+  $len = strlen($json);
+  for($l=$c=$i=0;$i<$len;$i++) {
+    $json[$i] == '"' && ($i>0?$json[$i-1]:'') != '\\' && $q = !$q;
+    if(!$q && in_array($json[$i], array(" ", "\r", "\n", "\t"))){continue;}
+    in_array($json[$i], array('{', '[')) && !$q && $l++;
+    in_array($json[$i], array('}', ']')) && !$q && $l--;
+    (isset($objects[$c]) && $objects[$c] .= $json[$i]) || $objects[$c] = $json[$i];
+    $c += ($l == 0);
+  }
+  return $objects;
+}
+
+/**
+ * The stocks page.
+ * @return string
+ */
+function stocktastic_stocks_page() {
+  drupal_add_js(drupal_get_path('module', 'stocktastic') . '/stocktastic.js');
+
+  $averages = stocktastic_get_averages();
+  $output = theme('stocktastic',
+    array(
+      'stocks_average' => $averages['stocks_average'],
+      'contestants_average' => $averages['contestants_average'],
+      'brokers_average' => $averages['brokers_average'],
+    )
+  );
+
+  $header = array(
+    'symbol' => array('data' => t('Stock')),
+    'name' => array('data' => t('Name')),
+    'year_start_price' => array('data' => t('Year start price'), 'style' => 'text-align: right'),
+    'current_price' => array('data' => t('Current price'), 'style' => 'text-align: right'),
+    'year_percent_change' => array('data' => t('Year change'), 'style' => 'text-align: right')
+  );
+
+  $query = db_select('stocktastic_stocks', 'ss')
+    ->extend('PagerDefault')
+    ->extend('TableSort');
+  $result = $query->fields('ss', array('symbol', 'name', 'year_start_price', 'last_trade_price_only', 'year_percent_change'))
+    ->limit(200)
+    ->orderBy('symbol', 'ASC')
+    ->execute();
+
+  while ($data = $result->fetchObject()) {
+    // Output a row in the table.
+    $rows[] = array(
+      stocktastic_symbol_truncate($data->symbol),
+      $data->name,
+      stocktastic_format_align('$' . stocktastic_format_decimals($data->year_start_price, 3)),
+      stocktastic_format_align('$' . stocktastic_format_decimals($data->last_trade_price_only, 3)),
+      stocktastic_format_align(stocktastic_format_decimals($data->year_percent_change, 2) . '%')
+    );
+  }
+
+  $output .= theme_table(array('header' => $header, 'rows' => $rows, 'attributes' => array('width' => '100%', 'id' => 'stocktastic-table', 'class' => array('tablesorter')), 'sticky' => TRUE, 'caption' => t('Updates hourly. Last updated: ' . date('l j M Y - g:ia', variable_get('stocktastic_last_update'))), 'colgroups' => array(), 'empty' => t('No data.'))) . theme("pager");
+
+  return $output;
+}
+
+/**
+ * The dividends page.
+ * @return string
+ */
+function stocktastic_dividends_page() {
+  $header = array(
+    'symbol' => array('data' => t('Stock')),
+    'ex-dividend' => array('data' => t('Ex-dividend')),
+    'payable' => array('data' => t('Payable')),
+    'period' => array('data' => t('Period')),
+    'amount' => array('data' => t('Amount'), 'style' => 'text-align: right'),
+    'supp' => array('data' => t('Supp'), 'style' => 'text-align: right'),
+    'imputation' => array('data' => t('Imputation'), 'style' => 'text-align: right'),
+  );
+
+  $query = db_select('stocktastic_dividends', 'sd')
+    ->extend('PagerDefault')
+    ->extend('TableSort');
+  $result = $query->fields('sd')
+    ->limit(200)
+    ->orderBy('ex_dividend', 'ASC')
+    ->execute();
+
+  $rows = array();
+  while ($data = $result->fetchObject()) {
+    // Output a row in the table.
+    $rows[] = array(
+      stocktastic_symbol_truncate($data->symbol),
+      format_date($data->ex_dividend, 'custom', 'd/m/Y'),
+      format_date($data->payable, 'custom', 'd/m/Y'),
+      $data->period,
+      stocktastic_format_align('$' . stocktastic_format_decimals($data->amount, 5)),
+      stocktastic_format_align('$' . stocktastic_format_decimals($data->supp, 5)),
+      stocktastic_format_align('$' . stocktastic_format_decimals($data->imputation, 5)),
+    );
+  }
+
+  $output = theme_table(array('header' => $header, 'rows' => $rows, 'attributes' => array('width' => '100%', 'id' => 'stocktastic-table', 'class' => array('tablesorter')), 'sticky' => TRUE, 'caption' => '', 'colgroups' => array(), 'empty' => t('No dividends.'))) . theme("pager");
+
+  return $output;
+}
+
+/**
+ * Work out the averages for the year for:
+ * All stocks, contestants selections, brokers selections.
+ *
+ * @return array
+ *   An array containing the averages.
+ */
+function stocktastic_get_averages() {
+  // The average stock movement for all stocks.
+  $query = db_select('stocktastic_stocks', 'ss');
+  $query->addExpression('AVG(year_percent_change)');
+  $average_change = $query->execute()->fetchField();
+  $stocks_average = stocktastic_format_decimals($average_change, 2);
+  // The average stock movement for the contestants' picks.
+  $query = db_select('stocktastic_contest', 'sc');
+  $query->condition('uid', array(152, 153, 154, 155, 156, 157, 158, 159), 'NOT IN');
+  $query->addExpression('AVG(year_change)');
+  $average_change = $query->execute()->fetchField();
+  $contestants_average = stocktastic_format_decimals($average_change, 2);
+  // The average stock movement for the brokers' picks.
+  $query = db_select('stocktastic_contest', 'sc');
+  $query->condition('uid', array(152, 159), 'BETWEEN');
+  $query->addExpression('AVG(year_change)');
+  $average_change = $query->execute()->fetchField();
+  $brokers_average = stocktastic_format_decimals($average_change, 2);
+
+  return array(
+    'stocks_average' => $stocks_average,
+    'contestants_average' => $contestants_average,
+    'brokers_average' => $brokers_average,
+  );
+}
+
+/**
+ * Truncates stock symbols by removing the period and everything after
+ * e.g. SKC.NZ becomes SKC.
+ *
+ * @param string $symbol
+ * @return string
+ */
+function stocktastic_symbol_truncate($symbol) {
+  $symbol = current(explode('.', $symbol));
+  return $symbol;
+}
+
+/**
+ * Generate a link to full quote for the stock on Google Finance.
+ *
+ * @param string $field
+ * @param string $title
+ *
+ * @return string
+ */
+function stocktastic_symbol_link($field, $title = '') {
+  $link = l(drupal_strtoupper($field), sprintf('https://www.google.com/finance?q=%s', 'NZE:' . $field), array('attributes' => array('target' => '_blank', 'title' => (drupal_strlen($title)) ? $title : $field)));
+  return $link;
+}
+
+/**
+ * Wrap the input right-aligned, inside a div.
+ *
+ * @param string $field
+ * @return string
+ */
+function stocktastic_format_align($field) {
+  return '<div style="text-align: right">' . $field . '</div>';
+}
+
+/**
+ * Format decimals, a variable number of decimal places as defined.
+ *
+ * @param string|integer $number
+ * @param integer $dp
+ *   The amount of decimal places to format the number to.
+ *
+ * @return float
+ */
+function stocktastic_format_decimals($number, $dp) {
+  return number_format((float)$number, $dp, '.', '');
+}
+
+/**
+ * Get, parse, and store dividend information from the NZX website.
+ */
+function stocktastic_dividends_fetch($symbol) {
+  $ch = curl_init();
+  curl_setopt($ch, CURLOPT_URL, 'https://www.nzx.com/markets/NZSX/securities/' . $symbol . '/dividends');
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+  $content = curl_exec($ch);
+  curl_close($ch);
+
+  $html = $content;
+  $cells = array();
+  libxml_use_internal_errors(true);
+  $dom = new DOMDocument;
+  $dom->loadHTML($html);
+  $dom->preserveWhiteSpace = false;
+  libxml_use_internal_errors(false);
+  foreach ($dom->getElementsByTagName('td') as $node) {
+    $cells[] = strip_tags($dom->saveHtml($node));
+  }
+  $dividends = array_chunk($cells, 7);
+  foreach ($dividends as $dividend) {
+    $date = DateTime::createFromFormat('d/m/Y', $dividend[0]);
+    $date->setTime(0,0,0);
+    $ex_dividend = $date->getTimestamp();
+    $date = DateTime::createFromFormat('d/m/Y', $dividend[5]);
+    $date->setTime(0,0,0);
+    $payable = $date->getTimestamp();
+    $amount = rtrim($dividend[2], 'c') / 100;
+    $supp = rtrim($dividend[3], 'c') / 100;
+    $imputation = rtrim($dividend[4], 'c') / 100;
+    db_merge('stocktastic_dividends')
+      ->key(array('symbol' => $symbol, 'ex_dividend' => $ex_dividend))
+      ->fields(array(
+        'payable ' => $payable,
+        'period ' => $dividend[1],
+        'amount ' => $amount,
+        'supp' => $supp,
+        'imputation' => $imputation,
+      ))
+      ->execute();
+  }
+}

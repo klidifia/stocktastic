@@ -1,0 +1,6 @@
+name = Stockstastic
+description = Stocktastic custom code
+package = "Stocktastic"
+configure = admin/config/services/stocktastic
+core = 7.x
+version = 7.x-1.0

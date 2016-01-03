@@ -1,0 +1,218 @@
+<?php
+
+/**
+ * @file
+ * Contains the schema for Stocktastic contest.
+ */
+
+
+/**
+ * Implements hook_schema().
+ */
+function stocktastic_schema() {
+  $schema = array();
+
+  $schema['stocktastic_contest'] = array(
+    'description' => 'A table to store stock choices for the contest',
+    'fields' => array(
+      'year' => array(
+        'description' => 'Contest year',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'uid' => array(
+        'description' => 'User ID',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'alias' => array(
+        'description' => 'Username',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'rank' => array(
+        'description' => 'Ranking',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+      ),
+      'stock1' => array(
+        'description' => '1st stock pick',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'stock2' => array(
+        'description' => '2nd stock pick',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'stock3' => array(
+        'description' => '3rd stock pick',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'stock4' => array(
+        'description' => '4th stock pick',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'stock5' => array(
+        'description' => '5th stock pick',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'year_change' => array(
+        'description' => 'Percentage change for the year',
+        'type' => 'float',
+        'not null' => FALSE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('year', 'uid'),
+  );
+
+  $schema['stocktastic_stocks'] = array(
+    'description' => 'A table to store stock information',
+    'fields' => array(
+      'symbol' => array(
+        'description' => 'Symbol',
+        'type' => 'varchar',
+        'length' => 12,
+        'not null' => TRUE,
+        'default' => '',
+        'yahoo' => 's'
+      ),
+      'name' => array(
+        'description' => 'Company Name',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+        'default' => '',
+        'yahoo' => 'n'
+      ),
+      'last_trade_price_only' => array(
+        'description' => 'Last Trade (Price Only)',
+        'type' => 'float',
+        'not null' => FALSE,
+        'default' => 0,
+        'yahoo' => 'l1'
+      ),
+      'year_start_price' => array(
+        'description' => 'The stocks price at the beginning of the calendar year',
+        'type' => 'float',
+        'not null' => FALSE,
+        'default' => 0,
+      ),
+      'dividends' => array(
+        'description' => 'The dividends paid for this stock this calendar year',
+        'type' => 'float',
+        'not null' => FALSE,
+        'default' => 0,
+      ),
+      'manual_adjustments' => array(
+        'description' => 'Any manual adjustments required for this stock for the calendar year',
+        'type' => 'float',
+        'not null' => FALSE,
+        'default' => 0,
+      ),
+      'year_percent_change' => array(
+        'description' => 'The percentage change of the stock this calendar year',
+        'type' => 'float',
+        'not null' => FALSE,
+        'default' => 0,
+      ),
+      'updated' => array(
+        'description' => 'When the stock was last updated from the API',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+        'default' => 0
+      ),
+    ),
+    'primary key' => array('symbol'),
+  );
+
+  $schema['stocktastic_dividends'] = array(
+    'description' => 'A table to store stock dividends',
+    'fields' => array(
+      'id' => array(
+        'description' => 'Unique ID',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'symbol' => array(
+        'description' => 'Symbol',
+        'type' => 'varchar',
+        'length' => 12,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'ex_dividend' => array(
+        'description' => 'Ex-dividend date',
+        'type' => 'int',
+        'not null' => FALSE,
+        'default' => 0,
+      ),
+      'payable' => array(
+        'description' => 'Payable date',
+        'type' => 'int',
+        'not null' => FALSE,
+        'default' => 0,
+      ),
+      'period' => array(
+        'description' => 'Period',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+        'default' => '',
+      ),
+      'amount' => array(
+        'description' => 'Amount',
+        'type' => 'float',
+        'not null' => FALSE,
+        'default' => 0,
+      ),
+      'supp' => array(
+        'description' => 'Supp',
+        'type' => 'float',
+        'not null' => FALSE,
+        'default' => 0,
+      ),
+      'imputation' => array(
+        'description' => 'Imputation',
+        'type' => 'float',
+        'not null' => FALSE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('id'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implements hook_enable().
+ */
+function stocktastic_enable() {
+
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function stocktastic_uninstall() {
+  variable_del('stocktastic_last_dividend');
+  variable_del('stocktastic_last_update');
+  variable_del('stocktastic_data');
+  variable_del('stocktastic_entry_close');
+}
