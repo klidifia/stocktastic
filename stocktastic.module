@@ -5,8 +5,6 @@
  * Stocktastic stock picking contest.
  */
 
-module_load_include('inc', 'stocktastic');
-
 /**
  * Implements hook_menu().
  */
