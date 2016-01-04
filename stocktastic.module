@@ -640,7 +640,19 @@ function stocktastic_stock_contest_2015() {
     );
   }
 
-  $output .= theme_table(array('header' => $header, 'rows' => $rows, 'attributes' => array('width' => '100%', 'id' => 'stocktastic-table'), 'sticky' => TRUE, 'caption' => t('Updates hourly. Last updated: ' . date('l j M Y - g:ia', variable_get('stocktastic_last_update'))), 'colgroups' => array(), 'empty' => t('No data.'))) . theme("pager");
+  $output .= theme('table', array(
+    'header' => $header,
+    'rows' => $rows,
+    'attributes' => array(
+      'width' => '100%',
+      'id' => 'stocktastic-table',
+    ),
+    'sticky' => TRUE,
+    'caption' => t('Updates hourly. Last updated: ' . date('l j M Y - g:ia', variable_get('stocktastic_last_update'))),
+    'colgroups' => array(),
+    'empty' => t('No data.'),
+    ));
+  $output .= theme('pager');
 
   return $output;
 }
@@ -707,7 +719,19 @@ function stocktastic_stock_contest_2016() {
     );
   }
 
-  $output .= theme_table(array('header' => $header, 'rows' => $rows, 'attributes' => array('width' => '100%', 'id' => 'stocktastic-table'), 'sticky' => TRUE, 'caption' => t('Updates hourly. Last updated: ' . date('l j M Y - g:ia', variable_get('stocktastic_last_update'))), 'colgroups' => array(), 'empty' => t('No data.'))) . theme("pager");
+  $output .= theme('table', array(
+    'header' => $header,
+    'rows' => $rows,
+    'attributes' => array(
+      'width' => '100%',
+      'id' => 'stocktastic-table'
+    ),
+    'sticky' => TRUE,
+    'caption' => t('Updates hourly. Last updated: ' . date('l j M Y - g:ia', variable_get('stocktastic_last_update'))),
+    'colgroups' => array(),
+    'empty' => t('No data.'),
+  ));
+  $output .= theme('pager');
 
   return $output;
 }
@@ -781,7 +805,20 @@ function stocktastic_stocks_page() {
     );
   }
 
-  $output .= theme_table(array('header' => $header, 'rows' => $rows, 'attributes' => array('width' => '100%', 'id' => 'stocktastic-table', 'class' => array('tablesorter')), 'sticky' => TRUE, 'caption' => t('Updates hourly. Last updated: ' . date('l j M Y - g:ia', variable_get('stocktastic_last_update'))), 'colgroups' => array(), 'empty' => t('No data.'))) . theme("pager");
+  $output .= theme('table', array(
+    'header' => $header,
+    'rows' => $rows,
+    'attributes' => array(
+      'width' => '100%',
+      'id' => 'stocktastic-table',
+      'class' => array('tablesorter')
+    ),
+    'sticky' => TRUE,
+    'caption' => t('Updates hourly. Last updated: ' . date('l j M Y - g:ia', variable_get('stocktastic_last_update'))),
+    'colgroups' => array(),
+    'empty' => t('No data.'),
+    ));
+  $output .= theme('pager');
 
   return $output;
 }

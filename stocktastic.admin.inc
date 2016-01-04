@@ -63,7 +63,19 @@ function stocktastic_stocks() {
     );
   }
 
-  $output .= theme_table(array('header' => $header, 'rows' => $rows, 'attributes' => array('width' => '100%', 'id' => 'stocktastic-table'), 'sticky' => TRUE, 'caption' => null, 'colgroups' => array(), 'empty' => t('No stocks.'))) . theme("pager");
+  $output .= theme('table',array(
+    'header' => $header,
+    'rows' => $rows,
+    'attributes' => array(
+      'width' => '100%',
+      'id' => 'stocktastic-table',
+    ),
+    'sticky' => TRUE,
+    'caption' => null,
+    'colgroups' => array(),
+    'empty' => t('No stocks.'),
+  ));
+  $output .= theme("pager");
 
   return $output;
 }
@@ -261,7 +273,19 @@ function stocktastic_dividends() {
     );
   }
 
-  $output .= theme_table(array('header' => $header, 'rows' => $rows, 'attributes' => array('width' => '100%', 'id' => 'stocktastic-table'), 'sticky' => TRUE, 'caption' => null, 'colgroups' => array(), 'empty' => t('No dividends.'))) . theme("pager");
+  $output .= theme('table', array(
+    'header' => $header,
+    'rows' => $rows,
+    'attributes' => array(
+      'width' => '100%',
+      'id' => 'stocktastic-table',
+    ),
+    'sticky' => TRUE,
+    'caption' => null,
+    'colgroups' => array(),
+    'empty' => t('No dividends.'),
+    ));
+  $output .= theme('pager');
 
   return $output;
 }
