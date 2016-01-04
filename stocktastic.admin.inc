@@ -125,7 +125,7 @@ function stocktastic_add_stock_form_submit($form, &$form_state) {
 /**
  * Implements hook_form().
  *
- * Stock edit form.
+ * Form to edit or delete an existing stock.
  */
 function stocktastic_edit_stock_form($form, &$form_state) {
   $result = db_select('stocktastic_stocks', 'ss')
@@ -179,12 +179,14 @@ function stocktastic_edit_stock_form($form, &$form_state) {
     '#type' => 'submit',
     '#value' => t('Edit stock'),
   );
-  $form['delete'] = array(
-    '#type' => 'submit',
-    '#value' => 'Delete',
-    '#submit' => array('stocktastic_edit_stock_form_delete'),
-  );
-
+  $delete = user_access('delete stocktastic stocks');
+  if (($delete) === TRUE) {
+    $form['delete'] = array(
+      '#type' => 'submit',
+      '#value' => 'Delete',
+      '#submit' => array('stocktastic_edit_stock_form_delete'),
+    );
+  }
   return $form;
 }
 
@@ -210,6 +212,10 @@ function stocktastic_edit_stock_form_submit($form, &$form_state) {
  * Stock deletion handler.
  */
 function stocktastic_edit_stock_form_delete($form, &$form_state) {
+  $delete = user_access('delete stocktastic stocks');
+  if (($delete) !== TRUE) {
+    return FALSE;
+  }
   db_delete('stocktastic_stocks')
     ->condition('symbol', arg(5), '=')
     ->execute();

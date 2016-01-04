@@ -5,10 +5,6 @@
  * Stocktastic stock picking contest.
  */
 
-
-// @TODO: Hook up the delete permission to the button and the function it calls also.
-
-
 module_load_include('inc', 'stocktastic');
 
 /**
