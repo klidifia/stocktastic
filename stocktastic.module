@@ -67,13 +67,7 @@ function stocktastic_menu() {
     'file' => 'stocktastic.admin.inc',
   );
 
-  $items['rankings/2015'] = array(
-    'title' => '2015 NZX stock picking contest',
-    'description' => '2015 NZX stock picking contest',
-    'page callback' => 'stocktastic_stock_contest_2015',
-    'access arguments' => array('access content'),
-  );
-    $items['rankings/2016'] = array(
+  $items['rankings/2016'] = array(
     'title' => '2016 NZX stock picking contest',
     'description' => '2016 NZX stock picking contest',
     'page callback' => 'stocktastic_stock_contest_2016',
@@ -572,87 +566,6 @@ function stocktastic_get_stock_info($symbol) {
   $output = $result;
 
   drupal_json_output($output);
-}
-
-
-
-/**
- * The rankings 2015 page.
- * @return string
- */
-function stocktastic_stock_contest_2015() {
-  drupal_set_message('The selections made by contestants should not be construed as any kind of financial advice. People should consider speaking to an authorised financial adviser before making any investments of any kind.', 'warning');
-
-  if (REQUEST_TIME < variable_get('stocktastic_entry_close', 1420023639)) {
-    $close = date('l jS F Y - H:i:s', variable_get('stocktastic_entry_close', 1420023639));
-    drupal_set_message('Competition goes live and entries close on ' . $close . '.', 'info');
-  }
-  drupal_add_js(drupal_get_path('module', 'stocktastic') . '/stocktastic.js');
-  // Code for dialog popups with stock info.
-  drupal_add_library('system', 'ui.dialog');
-  $output = '<div id="dialog" style="display: none;">';
-  $output .= '<p style="text-align: center;"><img src="' . drupal_get_path('theme', 'stocky') . '/images/ajax-loader.gif" /></p>';
-  $output .= '</div>';
-
-  $averages = stocktastic_get_averages();
-  $output .= theme('stocktastic',
-    array(
-      'stocks_average' => $averages['stocks_average'],
-      'contestants_average' => $averages['contestants_average'],
-      'brokers_average' => $averages['brokers_average'],
-    )
-  );
-
-  $header = array(
-    'rank' => array('data' => t('Rank')),
-    'alias' => array('data' => t('Alias')),
-    'stocks' => array('data' => t('Stocks')),
-    'change' => array('data' => t('Change'), 'style' => 'text-align: right')
-  );
-
-  $query = db_select('stocktastic_contest', 'sc')
-    ->extend('PagerDefault')
-    ->extend('TableSort');
-  $result = $query->fields('sc', array('uid', 'alias', 'rank', 'stock1', 'stock2', 'stock3', 'stock4', 'stock5', 'year_change'))
-	->condition('year', 2015, '=')
-    ->limit(1000)
-    ->orderBy('year_change', 'DESC')
-    ->execute();
-
-  while ($data = $result->fetchObject()) {
-    $rank = $data->rank;
-    $alias = check_plain($data->alias);
-
-    // Bold the brokers' picks.
-    if (($data->uid >= 152) && ($data->uid <= 159)) {
-      $rank = '<span style="font-weight: bold;">' . $rank . '</span>';
-      $alias = '<span style="font-weight: bold;">' . $alias . '</span>';
-    }
-
-    // Output a row in the table.
-    $rows[] = array(
-      $rank,
-      $alias,
-      '<span class="stock">' . stocktastic_symbol_truncate($data->stock1) . '</span> <span class="stock">' . stocktastic_symbol_truncate($data->stock2) . '</span> <span class="stock">' . stocktastic_symbol_truncate($data->stock3) . '</span> <span class="stock">' . stocktastic_symbol_truncate($data->stock4) . '</span> <span class="stock">' . stocktastic_symbol_truncate($data->stock5) .'</span>',
-      stocktastic_format_align(stocktastic_format_decimals($data->year_change, 2) . '%')
-    );
-  }
-
-  $output .= theme('table', array(
-    'header' => $header,
-    'rows' => $rows,
-    'attributes' => array(
-      'width' => '100%',
-      'id' => 'stocktastic-table',
-    ),
-    'sticky' => TRUE,
-    'caption' => t('Updates hourly. Last updated: ' . date('l j M Y - g:ia', variable_get('stocktastic_last_update'))),
-    'colgroups' => array(),
-    'empty' => t('No data.'),
-    ));
-  $output .= theme('pager');
-
-  return $output;
 }
 
 /**
