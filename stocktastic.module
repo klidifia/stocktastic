@@ -232,7 +232,7 @@ function stocktastic_cron() {
       ->fields(array(
         'dividends' => $dividend->amount
       ))
-      ->condition('symbol', $dividend->symbol, '=')
+      ->condition('symbol', $dividend->symbol . '.NZ', '=')
       ->execute();
   }
 
@@ -792,12 +792,14 @@ function stocktastic_get_averages() {
   // The average stock movement for the contestants' picks.
   $query = db_select('stocktastic_contest', 'sc');
   $query->condition('uid', array(152, 153, 154, 155, 156, 157, 158, 159), 'NOT IN');
+  $query->condition('year', 2016, '=');
   $query->addExpression('AVG(year_change)');
   $average_change = $query->execute()->fetchField();
   $contestants_average = stocktastic_format_decimals($average_change, 2);
   // The average stock movement for the brokers' picks.
   $query = db_select('stocktastic_contest', 'sc');
   $query->condition('uid', array(152, 159), 'BETWEEN');
+  $query->condition('year', 2016, '=');
   $query->addExpression('AVG(year_change)');
   $average_change = $query->execute()->fetchField();
   $brokers_average = stocktastic_format_decimals($average_change, 2);
