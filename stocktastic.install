@@ -5,7 +5,6 @@
  * Contains the schema for Stocktastic contest.
  */
 
-
 /**
  * Implements hook_schema().
  */
@@ -88,7 +87,6 @@ function stocktastic_schema() {
         'length' => 12,
         'not null' => TRUE,
         'default' => '',
-        'yahoo' => 's'
       ),
       'name' => array(
         'description' => 'Company Name',
@@ -96,14 +94,12 @@ function stocktastic_schema() {
         'length' => 255,
         'not null' => FALSE,
         'default' => '',
-        'yahoo' => 'n'
       ),
       'last_trade_price_only' => array(
         'description' => 'Last Trade (Price Only)',
         'type' => 'float',
         'not null' => FALSE,
         'default' => 0,
-        'yahoo' => 'l1'
       ),
       'year_start_price' => array(
         'description' => 'The stocks price at the beginning of the calendar year',
@@ -213,6 +209,5 @@ function stocktastic_enable() {
 function stocktastic_uninstall() {
   variable_del('stocktastic_last_dividend');
   variable_del('stocktastic_last_update');
-  variable_del('stocktastic_data');
   variable_del('stocktastic_entry_close');
 }

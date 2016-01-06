@@ -14,25 +14,15 @@ function stocktastic_admin_settings() {
     '#prefix' => '<strong>Update frequency</strong>',
     '#markup' => '<p>' . t('Stocktastic updates on every cron run. ' . (l('Run cron', 'admin/reports/status/run-cron'))) . '.</p>'
   );
-
-  $form['stocktastic_data'] = array(
-    '#type' => 'textfield',
-    '#title' => t('The fields of data to receive on the stocks.'),
-    '#default_value' => variable_get('stocktastic_data', 'sl1'),
-    '#description' => t('Refer to: http://greenido.wordpress.com/2009/12/22/yahoo-finance-hidden-api/'),
-  );
-
   $form['stocktastic_entry_close'] = array(
     '#type' => 'textfield',
     '#title' => t('The closing time of the competition.'),
     '#default_value' => variable_get('stocktastic_entry_close', 1420023639),
     '#description' => t('Enter this in epoch time'),
   );
-
   $form['stocktastic_symbols'] = array(
     '#markup' => '<p>' . l('Enter the stock manager', 'admin/config/services/stocktastic/stocks') . '</p>',
   );
-
   return system_settings_form($form);
 }
 
@@ -75,7 +65,7 @@ function stocktastic_stocks() {
     'colgroups' => array(),
     'empty' => t('No stocks.'),
   ));
-  $output .= theme("pager");
+  $output .= theme('pager');
 
   return $output;
 }

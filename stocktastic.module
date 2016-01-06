@@ -320,7 +320,7 @@ function stocktastic_entry_form($form, &$form_state) {
     $form['message'] = array(
       '#prefix' => '<p>',
       '#markup' => t('You have to be logged in to enter the competition.'),
-      '#suffix' => '</p><p>' . l('Login', 'user/login', array('query' => array($destination))) . ' | ' . l('Sign up', 'user/register') . '.</p>'
+      '#suffix' => '</p><p>' . l('Login', 'user/login', array('query' => array($destination))) . ' or ' . l('Sign up', 'user/register') . '.</p>'
     );
     return $form;
   }
@@ -330,7 +330,7 @@ function stocktastic_entry_form($form, &$form_state) {
   $result = db_select('stocktastic_contest', 'sc')
     ->fields('sc', array('uid', 'stock1', 'stock2', 'stock3', 'stock4', 'stock5'))
     ->condition('sc.uid', $user->uid, '=')
-	->condition('year', 2016, '=')
+	  ->condition('year', 2016, '=')
     ->execute()
     ->fetch();
 
